@@ -1,10 +1,15 @@
 {
-        "name": "Hello Extensions",
-        "description": "Base Level Extension",
-        "version": "1.0",
+        "name": "Cookie Monster",
+        "description": "Returns Cookie Details",
+        "version": "1.1",
         "manifest_version": 3,
+        "permissions": ["cookies", "tabs"],
+        "host_permissions": ["<all_urls>"],
         "action": {
           "default_popup": "hello.html",
           "default_icon": "hello_extensions.png"
+        },
+        "background": {
+          "service_worker": "cookies.js"
         }
       }
