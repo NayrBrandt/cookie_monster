@@ -1,15 +1,15 @@
 {
         "name": "Cookie Monster",
-        "description": "Returns Cookie Details",
-        "version": "1.1",
+        "description": "Returns Sorted Cookie Details",
+        "version": "1.2",
         "manifest_version": 3,
-        "permissions": ["cookies", "tabs"],
+        "permissions": ["cookies", "tabs", "webNavigation", "scripting"],
         "host_permissions": ["<all_urls>"],
         "action": {
-          "default_popup": "hello.html",
+          "default_popup": "layout.html",
           "default_icon": "hello_extensions.png"
         },
         "background": {
           "service_worker": "cookies.js"
         }
-      }
+}
