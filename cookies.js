@@ -39,8 +39,7 @@ function updateSettings() {
                     chrome.cookies.remove({ 
                         url: `http${cookie.secure ? "s" : ""}://${cookie.domain}${cookie.path}`, 
                         name: cookie.name,
-                        value: "",
-                        expirationDate: (Date.now() / 1000) + 3600
+                        storeId: cookie.storeId
                     });
                     console.log(`Blocked cookie: ${cookie.name}`);
                 }
