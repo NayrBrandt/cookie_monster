@@ -1,16 +1,57 @@
 // cookies.js: process cookies in the background, separate from popup script
 // Listen for getCookies() function call in popup.js
 
-if (!chrome.runtime.onMessage.hasListener(cookieCall)) {
-    chrome.runtime.onMessage.addListener(cookieCall);
-}
+chrome.runtime.onMessage.addListener(cookieCall);
+
+chrome.runtime.onInstalled.addListener(() => {
+    chrome.storage.local.set({ blocked: {}, cached: null });
+});
 
 function cookieCall(request, sender, sendResponse) {
     if (request.action === "getCookies") {
-        console.log("Getting cookies...");
-        getAllCookies(sendResponse);
-        return true; // always return true for async responses (async = this is a background process separate from popup.js)
+        chrome.storage.local.get("cached", function (data) {
+            if (data.cached) {
+                console.log("Cached cookies found.");
+                sendResponse({ cookies: data.cached });
+            } else {
+                console.log("Fetching cookies...");
+                getAllCookies(sendResponse);
+            }
+        });
+        return true; 
+        
+        // getAllCookies(sendResponse);
+        // return true; // always return true for async responses (async = this is a background process separate from popup.js)
+    } else if (request.action === "updateSettings") {
+        updateSettings();
+        console.log("Cookie settings updated.");
+        sendResponse({ success: true });
+
     }
+}
+
+function updateSettings() {
+    chrome.storage.local.get("blocked", function (data) {
+        let blocked = data.blocked || {};
+        chrome.cookies.getAll({}, function (cookies) {
+            cookies.forEach(cookie => {
+                if (blocked[cookie.name]) {
+                    chrome.cookies.remove({ 
+                        url: `http${cookie.secure ? "s" : ""}://${cookie.domain}${cookie.path}`, 
+                        name: cookie.name,
+                        value: "",
+                        expirationDate: (Date.now() / 1000) + 3600
+                    });
+                    console.log(`Blocked cookie: ${cookie.name}`);
+                }
+            });
+        });
+
+        // store settings
+        chrome.storage.local.set({ blocked }, function () {
+            console.log("Blocked settings saved.");
+        });
+    });
 }
 
 async function getAllCookies(sendResponse) {
@@ -40,7 +81,7 @@ async function getAllCookies(sendResponse) {
         const frameUrls = [...new Set(frames
             .map(frame => frame.url)
             .filter(url => url && url.startsWith('http')))];
-        
+
         const allUrls = [...new Set([
             tab.url,
             ...frameUrls,
@@ -53,10 +94,10 @@ async function getAllCookies(sendResponse) {
         // will contain duplicates: some cookies are called from multiple domains/subdomains
         // array of arrays: each array contains cookies for a specific url
         const arrays = await Promise.all(
-            allUrls.map(url => 
+            allUrls.map(url =>
                 chrome.cookies.getAll({ url })
-                    .catch(err => {
-                        console.warn(`Failed to get cookies for ${url}:`, err);
+                    .catch(error => {
+                        console.warn(`Failed to get cookies for ${url}:`, error);
                         return [];
                     })
             )
@@ -73,15 +114,25 @@ async function getAllCookies(sendResponse) {
             }
         });
 
-        const cookies = Array.from(cMap.values());
+        let cookies = Array.from(cMap.values());
+        console.log(`${cookies.length} cookies found.`);
 
-        sendResponse({cookies});
-        console.log(cookies.length, "cookies found.");
+        // blocked cookies saved in local storage
+        // filter and load cookies by block status
+        chrome.storage.local.get("blocked", function (data) {
+            let blocked = data.blocked || {};
+            allowed = cookies.filter(cookie => !blocked[cookie.name]);
+
+            sendResponse({ cookies: allowed });
+            console.log(`${allowed.length} cookies allowed.`);
+        });
 
     } catch (error) {
         console.error("Error in getAllCookies method:", error);
         sendResponse({ error: error.message });
     }
+
+    return true;
 }
 
 
