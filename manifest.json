@@ -3,7 +3,7 @@
         "description": "Returns Sorted Cookie Details",
         "version": "1.2",
         "manifest_version": 3,
-        "permissions": ["cookies", "tabs", "webNavigation", "webRequest", "scripting", "storage"],
+        "permissions": ["cookies", "tabs", "webNavigation", "declarativeNetRequestWithHostAccess", "scripting", "storage"],
         "host_permissions": ["<all_urls>"],
         "action": {
           "default_popup": "layout.html",
