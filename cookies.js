@@ -9,26 +9,8 @@ chrome.runtime.onInstalled.addListener(() => {
     chrome.storage.local.set({ cookies: {} });
 });
 
-// set network blocking rules when extension is launched
-chrome.runtime.onStartup.addListener(async () => {
-    console.log("Extension launched, applying network blocking rules...");
-    await updateBlockRules();
-});
-
-
-
-
-
-// update network blocking rules when a cookie is added or removed from list
-chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes.cookies) {
-        console.log("Detected cookie storage change, updating rules...");
-        updateBlockRules();
-    }
-});
-
 async function updateBlockRules() {
-    let { cookies } = await chrome.storage.local.get("cookies");
+    let { cookies } = await chrome.storage.local.get("cookies"); // TODO: handle a toggled cookie that hasn't yet been stored in storage
     if (!cookies) return;
     console.log("Blocklist modified, updating rules.")
 
@@ -37,106 +19,79 @@ async function updateBlockRules() {
     // Replace rules with updated block list
     let old = await chrome.declarativeNetRequest.getDynamicRules();
     let removeIds = old.map(rule => rule.id);
-    let usedIds = new Set(old.map(rule => rule.id));
-
-
-    // let idCount = usedIds.size > 0 ? Math.max(...usedIds) + 1 : 1;
 
     let blocked = new Map();
     for (const domain in cookies) {
         for (const cookieName in cookies[domain].blocked || {}) {
-            if (!blocked.has(domain)) {+
+            if (!blocked.has(domain)) {
                 blocked.set(domain, new Set());
             }
             blocked.get(domain).add(cookieName);
         }
     }
 
-    console.log(`Removing ${removeIds.length} rules.`)
+    // console.log(`Removing ${removeIds.length} rules.`)
 
     let newRules = [];
-    // let idCount = 1;
+    let increment = removeIds.length > 0 ? removeIds.length + 1 : 1;
 
     blocked.forEach((cookieNames, domain) => {
 
-        const domainFormats = [
-            `*://*.${domain}/*`,
-            `*://${domain}/*`,
-            `*://*.www.${domain}/*`
-        ];
+        let url = domain.startsWith("www.")
+            ? `*://${domain}/*`
+            : domain.startsWith(".")
+                ? `*://${domain}/*`
+                : `*://.${domain}/*`;
 
         cookieNames.forEach(cookieName => {
-            domainFormats.forEach(url => {
-                console.log(`Creating rules for ${cookieName} on ${domain}`);
+            // domainFormats.forEach(url => {
+            console.log(`Creating rules for ${cookieName} on ${domain}`); // TODO: does this block requests from third parties? is the current domain being returned always first-party?
 
-                let idCount = Date.now();
-                while (usedIds.has(idCount)) idCount++;
-                // 2 rules for each cookie:
-                // 1. Block Set-Cookie header to block requests to replace blocked cookie
-                newRules.push({
-                    id: idCount,
-                    priority: 1,
-                    action: {
-                        type: "modifyHeaders",
-                        responseHeaders: [{
-                            header: "Set-Cookie",
-                            operation: "remove"
-                            // value: `(?i)(^|;\\s*)${cookieName}=[^;]*`,
-                            // regex: true
-                        }]
-                    },
-                    condition: {
-                        urlFilter: url,
-                        resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest", "script", "other"]
-                    }
-                });
+            let count1 = increment++;
+            let count2 = increment++;
 
-                usedIds.add(idCount);
-                idCount = Date.now();
-
-                while (usedIds.has(idCount)) idCount++;
-
-                // 2. Block Cookie header to block requests that send blocked cookie to site
-                newRules.push({
-                    id: idCount,
-                    priority: 1,
-                    action: {
-                        type: "modifyHeaders",
-                        requestHeaders: [{
-                            header: "Cookie",
-                            operation: "remove"
-                            // value: `(^|;\\s*)${cookieName}=[^;]*`,
-                            // regex: true
-                        }]
-                    },
-                    condition: {
-                        urlFilter: url,
-                        resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest", "script", "other"]
-                    }
-                });
-                usedIds.add(idCount);
-                idCount++;
+            // 2 rules for each cookie:
+            // 1. Block Set-Cookie header to block requests to replace blocked cookie
+            newRules.push({
+                id: count1,
+                priority: 1,
+                action: {
+                    type: "modifyHeaders",
+                    responseHeaders: [{
+                        header: "Set-Cookie",
+                        operation: "remove"
+                    }]
+                },
+                condition: {
+                    urlFilter: url,
+                    resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest", "script", "other"]
+                }
+            });
+            // 2. Block Cookie header to block requests that send blocked cookie to site
+            newRules.push({
+                id: count2,
+                priority: 1,
+                action: {
+                    type: "modifyHeaders",
+                    requestHeaders: [{
+                        header: "Cookie",
+                        operation: "remove"
+                    }]
+                },
+                condition: {
+                    urlFilter: url,
+                    resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest", "script", "other"]
+                }
             });
         });
     });
 
     try {
-        // remove all existing rules
-        if (removeIds.length > 0) {
-            console.log(`Removing ${removeIds.length} old rules...`);
-            await chrome.declarativeNetRequest.updateDynamicRules({
-                removeRuleIds: removeIds,
-                addRules: []
-            });
-        }
-
-        // replace with updated rules
-        if (newRules.length > 0) {
-            await chrome.declarativeNetRequest.updateDynamicRules({
-                removeRuleIds: [],
-                addRules: newRules
-            });
-        }
+        console.log(`Removing ${removeIds.length} old rules and adding ${newRules.length} new ones...`);
+        await chrome.declarativeNetRequest.updateDynamicRules({
+            removeRuleIds: removeIds,
+            addRules: newRules
+        });
         console.log(`Updated cookie request blocking rules. ${newRules.length} rules added.`);
     } catch (error) {
         console.error("Failed to update rules:", error);
@@ -146,6 +101,7 @@ async function updateBlockRules() {
 
 function cookieCall(request, sender, sendResponse) {
     if (request.action === "getCookies") {
+        console.log("Received getCookies request.")
         chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
 
             if (!tabs[0].url?.startsWith('http')) {
@@ -153,28 +109,12 @@ function cookieCall(request, sender, sendResponse) {
                 return;
             }
             const domain = new URL(tabs[0].url).hostname.replace(/^www\./, '').toLowerCase();
-
-
-            chrome.storage.local.get("cookies", function (data) {
-                const domainData = data.cookies?.[domain] || {};
-                if (domainData.cached) {
-                    console.log("Cached cookies found for", domain);
-                    sendResponse({
-                        cookies: domainData.cached.filter(c => !domainData.blocked?.[c.name]),
-                        blocked: domainData.blocked || {},
-                        domain: domain
-                    });
-                } else {
-                    console.log("Fetching cookies for", domain);
-                    getAllCookies(domain, sendResponse);
-                }
-            });
+            getAllCookies(domain, sendResponse);
         });
 
         return true; // async
     }
     else if (request.action === "updateBlockRules") {
-        console.log("Received request to update network blocking rules.");
         updateBlockRules();
     }
 
@@ -189,7 +129,21 @@ async function getAllCookies(domain, sendResponse) {
         const resourceUrls = await chrome.scripting.executeScript({
             target: { tabId: tab.id },
             func: () => {
-                return performance.getEntriesByType("resource").map(e => e.name);
+                // Get all external domains contacted by the page
+                const domains = new Set();
+                // Check scripts
+                document.querySelectorAll('script[src]').forEach(s => {
+                    try { domains.add(new URL(s.src).hostname); } catch { }
+                });
+                // Check images
+                document.querySelectorAll('img[src]').forEach(s => {
+                    try { domains.add(new URL(s.src).hostname); } catch { }
+                });
+                // Check iframes
+                document.querySelectorAll('iframe[src]').forEach(s => {
+                    try { domains.add(new URL(s.src).hostname); } catch { }
+                });
+                return Array.from(domains);
             }
         });
 
@@ -203,7 +157,7 @@ async function getAllCookies(domain, sendResponse) {
         // call cookies.getAll() for each url
         // will contain duplicates: some cookies are called from multiple domains/subdomains
         const allCookies = (await Promise.all(allUrls.map(url =>
-            chrome.cookies.getAll({ url }).catch(() => [])
+            chrome.cookies.getAll({}).catch(() => [])
         ))).flat();
         // make map to clear duplicates
         const cookies = Array.from(new Map(allCookies.map(c => [c.name, c])).values());
@@ -229,8 +183,3 @@ async function getAllCookies(domain, sendResponse) {
     }
 }
 
-function getUrl(cookie) {
-    let domain = cookie.domain.startsWith('.') ? cookie.domain.substring(1) : cookie.domain;
-    let security = cookie.secure ? 'https' : 'http';
-    return `${security}://${domain}${cookie.path}`;
-}
