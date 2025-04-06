@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html]>
+<html>
 
 <head>
   <title>Cookie Monster</title>
@@ -7,22 +7,31 @@
 </head>
 
 <body>
-  <div id="header">
-    <div id="head-text">
-      Refresh page to apply cookie settings.
+
+  <div class="tab">
+    <button class="tablinks">Preview</button>
+    <button class="tablinks">Cookies</button>
+    <button class="tablinks">More</button>
+  </div>
+
+  <div class="tab-content">
+    <div id="Preview" class="tabcontent">
+      <h1>Welcome to Cookie Monster!</h1>
+    </div>
+
+    <div id="Cookies" class="tabcontent">
+      <h2>Refresh page to apply cookie settings.</h2>
+      <span id="error-msg"></span>
+        <h3>Cookies Found</h3>
+        <ul id="cookie-list"></ul>
+    </div>
+
+    <div id="More" class="tabcontent">
+      <h3>Information about our extension</h3>
+      <h3>Link to our tutorial</h3>
     </div>
   </div>
-  <span id="error-msg"></span>
-  <div id="cookie-display">
-    <h3>Cookies Found</h3>
-    <ul id="cookie-list"></ul>
-    <!-- <h3>First-Party Cookies</h3>
-    <ul id="firstParty-list"></ul>
-
-    <h3>Third-Party Cookies</h3>
-    <ul id="thirdParty-list"></ul> -->
-  </div>
-  <script src=popup.js></script>
+  
+  <script src="popup.js"></script>
 </body>
-
 </html>

@@ -1,11 +1,37 @@
 document.addEventListener('DOMContentLoaded', () => {
-    if (!currentDomain) {
-        // clearAllRules();
-        loadCookies();
-    }
+    openTab('Preview');
+
+    const tabButtons = document.querySelectorAll('.tablinks');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', function () {
+            const tabName = button.textContent.trim();
+            console.log(`Tab clicked: ${tabName}`); 
+
+            openTab(tabName);
+
+            if (tabName === 'Cookies') {
+                loadCookies();
+            }
+        });
+    });
 });
 
-let currentDomain = null;
+function openTab(tabName) {
+    const tabContents = document.querySelectorAll('.tabcontent');
+    tabContents.forEach(content => content.classList.remove('active'));
+  
+    const tabButtons = document.querySelectorAll('.tablinks');
+    tabButtons.forEach(button => button.classList.remove('active'));
+
+    document.getElementById(tabName).classList.add('active');
+
+    const activeButton = Array.from(tabButtons).find(button => button.textContent.trim() === tabName);
+    if (activeButton) {
+        activeButton.classList.add('active');
+    }
+}
+
 
 function loadCookies() {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
@@ -36,7 +62,6 @@ function loadCookies() {
 
 chrome.runtime.onMessage.addListener(async function (request) {
     if (request.action === "getCookies") {
-
         display(domainData.cached, domainData.blocked);
     }
 });
@@ -59,7 +84,7 @@ async function clearAllRules() {
 
 async function display(cookies, blocked = {}) {
     let cookieList = document.getElementById("cookie-list");
-    cookieList.innerHTML = ""; // clear
+    cookieList.innerHTML = "";
 
     if (!cookies?.length) {
         document.getElementById("error-msg").innerText = "No cookies found.";
