@@ -3,13 +3,21 @@
         "description": "Returns Sorted Cookie Details",
         "version": "1.2",
         "manifest_version": 3,
-        "permissions": ["cookies", "tabs", "webNavigation", "declarativeNetRequest", "declarativeNetRequestWithHostAccess", "scripting", "storage", "webRequest"],
+        "permissions":
+         ["cookies",
+          "tabs",
+          "webNavigation",
+          "declarativeNetRequest",
+          "declarativeNetRequestWithHostAccess",
+          "scripting",
+          "storage",
+          "webRequest"],
         "host_permissions": ["<all_urls>"],
         "action": {
-          "default_popup": "layout.html",
-          "default_icon": "icon.png"
+          "default_popup": "popup/layout.html",
+          "default_icon": "images/icon.png"
         },
         "background": {
-          "service_worker": "cookies.js"
+          "service_worker": "scripts/cookies.js"
         }
 }
