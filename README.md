@@ -1,7 +1,7 @@
 # cookie_monster
 Building Usable Security Class Project
 
-##Install instructions:
+Install instructions:
 
 Download this entire repository to the folder you want to host the extension code.
 
@@ -13,5 +13,7 @@ The extension should now exist in the list of All Extensions on the page.
 You should be able to click the puzzle piece on the right side of the Address Bar to find the icon (currently a red and white HW) and highlight the pin for it.
 
 Click it. 
+
+To view the console for the plugin, you must click the icon to bring up the plugin popup. Right click, and select "Inspect."
 
 Ta da!
