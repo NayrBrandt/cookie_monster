@@ -1,7 +1,7 @@
 # cookie_monster
 Building Usable Security Class Project
 
-Install instructions:
+##Install instructions:
 
 Download this entire repository to the folder you want to host the extension code.
 
