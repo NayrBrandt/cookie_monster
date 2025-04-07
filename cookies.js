@@ -267,9 +267,25 @@ async function getAllCookies(domain, sendResponse) {
             all.push(...intercepted.get(domain));
         }
 
-        let unique = Array.from(
-            new Map(all.map(c => [`${c.name}|${c.domain}|${c.path}`, c])).values()
-        );
+        let unique = [];
+        const seen = new Set();
+
+        all.forEach(cookie => {
+            // Chrome treats cookies as duplicates if they have same:
+            // name, domain, and path
+            const key = JSON.stringify({
+                name: cookie.name,
+                domain: cookie.domain,
+                path: cookie.path,
+                secure: cookie.secure,
+                httpOnly: cookie.httpOnly
+            });
+            
+            if (!seen.has(key)) {
+                seen.add(key);
+                unique.push(cookie);
+            }
+        });
 
         const { cookies: stored = {} } = await chrome.storage.local.get("cookies");
         const currData = stored[domain] || { cached: [], blocked: {} };
