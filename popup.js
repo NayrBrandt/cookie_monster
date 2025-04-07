@@ -145,3 +145,36 @@ async function addToggle(e) {
     console.log("Loading cookies at end of addToggle function.")
     loadCookies();
 }
+
+
+const siteRemoveToggle = document.getElementById('site_remove');
+siteRemoveToggle.addEventListener('change', function() {
+    if (this.checked && this.id === 'site_remove') {
+        removeSiteCookies();
+    }
+  });
+
+function removeSiteCookies() {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        currentDomain = new URL(tabs[0].url).hostname.replace(/^www\./, '').toLowerCase();
+    });
+
+    chrome.storage.local.get("cookies", function (data) {
+        let domainData = data.cookies?.[currentDomain] || {};
+        if (domainData?.cached && domainData.cached.length > 0) {
+            domainData.cached.forEach(cookie => {
+                const cookieUrl = (cookie.secure ? "https://" : "http://") + cookie.domain + cookie.path;
+                chrome.cookies.remove({ url: cookieUrl, name: cookie.name }, function(details) {
+                    if (details){
+                        console.log("Deleted cookie: ${cookie.name} from ${cookieUrl}");
+                    } else {
+                        console.error("Failed to delete cookie: ${cookie.name} from ${cookieUrl}");
+                    }
+                })
+        });
+        } else {
+            console.log("No cookies found for ", currentDomain);
+        }
+    });
+    
+}
