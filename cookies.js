@@ -9,8 +9,92 @@ chrome.runtime.onInstalled.addListener(() => {
     chrome.storage.local.set({ cookies: {} });
 });
 
+let intercepted = new Map();
+
+chrome.webRequest.onHeadersReceived.addListener(
+    (details) => {
+        if (!details.responseHeaders) return;
+        console.log("Header received:", details);
+
+        let headers = details.responseHeaders.filter(h => h.name.toLowerCase() === 'set-cookie');
+
+        if (headers.length > 0) {
+            const domain = new URL(details.url).hostname;
+
+            let cookies = headers.map(h => parseHeaders(h.value));
+
+            if (!intercepted.has(domain)) {
+                intercepted.set(domain, []);
+            }
+            intercepted.get(domain).push(...cookies);
+
+            console.log(`Intercepted Set-Cookie: ${cookie.name}=${cookie.value} from ${details.url}`);
+            chrome.storage.local.get("cookies", (data) => {
+                let stored = data.cookies || {};
+                let url = new URL(details.url).hostname;
+                if (!stored[url]) {
+                    stored[url] = { cached: [], blocked: {}};
+                }
+                stored[url].cached.push(...cookies);
+
+                // Save updated cookies
+                console.log(`${stored[url].cached.length} cookies stored for ${url}.`);
+                chrome.storage.local.set({ cookies: stored });
+            });
+        }
+    },
+    { urls: ["<all_urls>"] },
+    ["responseHeaders"]
+);
+
+// Add this to your background script
+chrome.cookies.onChanged.addListener((changeInfo) => {
+    if (changeInfo.removed) return;
+    let cookie = changeInfo.cookie;
+    
+    let domain = cookie.domain.startsWith('.') 
+        ? cookie.domain.substring(1) 
+        : cookie.domain;
+        
+    if (!intercepted.has(domain)) {
+        intercepted.set(domain, []);
+    }
+    
+    intercepted.get(domain).push(cookie);
+    
+    chrome.storage.local.get("cookies", (data) => {
+        let stored = data.cookies || {};
+        if (!stored[domain]) {
+            stored[domain] = { cached: [], blocked: {} };
+        }
+        stored[domain].cached.push(cookie);
+        chrome.storage.local.set({ cookies: stored });
+    });
+});
+
+function parseHeaders(header) {
+    if (!header) return null;
+
+    const [info, ...attributes] = header.split(';').map(p => p.trim());
+    const [name, value] = info.includes('=')
+        ? info.split('=')
+        : [info, ''];
+
+    if (!name) return null;
+    
+    const cookie = { name, value };
+    attributes.forEach(attr => {
+        const [key, val] = attr.includes('=')
+            ? attr.split('=')
+            : [attr, true];
+        if (key) cookie[key.toLowerCase()] = val;
+    });
+    
+    return cookie;
+}
+
 async function updateBlockRules() {
-    let { cookies } = await chrome.storage.local.get("cookies"); // TODO: handle a toggled cookie that hasn't yet been stored in storage
+    let { cookies = {} } = await chrome.storage.local.get("cookies"); // TODO: handle a toggled cookie that hasn't yet been stored in storage
     if (!cookies) return;
     console.log("Blocklist modified, updating rules.")
 
@@ -33,7 +117,7 @@ async function updateBlockRules() {
     // console.log(`Removing ${removeIds.length} rules.`)
 
     let newRules = [];
-    let increment = removeIds.length > 0 ? removeIds.length + 1 : 1;
+    let increment = removeIds.length > 0 ? Math.max(...removeIds) + 1 : 1;
 
     blocked.forEach((cookieNames, domain) => {
 
@@ -120,66 +204,97 @@ function cookieCall(request, sender, sendResponse) {
 
 }
 
+
 async function getAllCookies(domain, sendResponse) {
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
+        let firstCookies = await chrome.cookies.getAll({ url: tab.url });
 
         // Get all resource URLs being called by host (first-party) webpage
         const resourceUrls = await chrome.scripting.executeScript({
             target: { tabId: tab.id },
             func: () => {
-                // Get all external domains contacted by the page
                 const domains = new Set();
-                // Check scripts
-                document.querySelectorAll('script[src]').forEach(s => {
-                    try { domains.add(new URL(s.src).hostname); } catch { }
+                document.querySelectorAll('[src], [href]').forEach(el => {
+                    try {
+                        const url = new URL(el.src || el.href, location.href);
+                        domains.add(url.hostname);
+                    } catch {}
                 });
-                // Check images
-                document.querySelectorAll('img[src]').forEach(s => {
-                    try { domains.add(new URL(s.src).hostname); } catch { }
-                });
-                // Check iframes
-                document.querySelectorAll('iframe[src]').forEach(s => {
-                    try { domains.add(new URL(s.src).hostname); } catch { }
-                });
+
+                if (window.performance) {
+                    performance.getEntriesByType("resource").forEach(resource => {
+                        try {
+                            const url = new URL(resource.name);
+                            domains.add(url.hostname);
+                        } catch { }
+                    });
+                }
+
                 return Array.from(domains);
             }
         });
-
+        console.log("Resource urls:", resourceUrls)
+        let resourceCookies = await Promise.all(
+            (resourceUrls[0]?.result || []).map(domain =>
+                chrome.cookies.getAll({ domain })
+            )
+        );
+        console.log("Resource cookies:", resourceCookies);
         // frame urls: external websites embedded in the host page (ads, videos, etc.)
         // combine current tab url, frame urls, and resource urls to retrieve all cookies
+
+        // 2. Get all frames
         const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id });
-        const allUrls = [...new Set([tab.url, ...frames.map(f => f.url), ...(resourceUrls[0]?.result || [])].filter(Boolean))];
+        const frameCookies = await Promise.all(
+            frames.map(frame =>
+                frame.url.startsWith('http')
+                    ? chrome.cookies.getAll({ url: frame.url })
+                    : Promise.resolve([])
+            )
+        );
+        console.log("Frames:", frames);
+        console.log("Frame cookies:", frameCookies);
 
-        console.log(`All URLs called by host domain ${domain}:`, allUrls);
+        let all = [
+            ...firstCookies,
+            ...frameCookies.flat(),
+            ...resourceCookies.flat()
+        ];
 
-        // call cookies.getAll() for each url
-        // will contain duplicates: some cookies are called from multiple domains/subdomains
-        const allCookies = (await Promise.all(allUrls.map(url =>
-            chrome.cookies.getAll({}).catch(() => [])
-        ))).flat();
-        // make map to clear duplicates
-        const cookies = Array.from(new Map(allCookies.map(c => [c.name, c])).values());
+        if (intercepted.has(domain)) {
+            all.push(...intercepted.get(domain));
+        }
 
-        console.log(`${cookies.length} cookies found for ${domain}.`);
+        let unique = Array.from(
+            new Map(all.map(c => [`${c.name}|${c.domain}|${c.path}`, c])).values()
+        );
 
-        chrome.storage.local.get("cookies", function (data) {
-            const stored = data.cookies || {};
-            stored[domain] = { cached: cookies, blocked: stored[domain]?.blocked || {} };
+        const { cookies: stored = {} } = await chrome.storage.local.get("cookies");
+        const currData = stored[domain] || { cached: [], blocked: {} };
+        
+        let update = {
+            ...stored,
+            [domain]: {
+                cached: unique,
+                blocked: currData.blocked
+            }
+        };
+        await chrome.storage.local.set({ cookies: update });
 
-            chrome.storage.local.set({ cookies: stored }, () => {
-                sendResponse({
-                    cookies: cookies.filter(c => !stored[domain].blocked?.[c.name]),
-                    blocked: stored[domain].blocked,
-                    domain: domain
-                });
-            });
-            console.log(`Cache created for ${domain}:`, stored[domain]);
+        // let filtered = unique.filter(
+        //     c => !currData.blocked?.[c.name]
+        // );
+        console.log(`${unique.length} cookies found for ${domain}.`);
+        sendResponse({
+            cookies: unique,
+            blocked: currData.blocked,
+            domain: domain
         });
+
     } catch (error) {
         console.error("Error in getAllCookies method:", error);
         sendResponse({ error: error.message });
     }
 }
-
