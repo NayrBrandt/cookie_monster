@@ -14,4 +14,6 @@ You should be able to click the puzzle piece on the right side of the Address Ba
 
 Click it. 
 
+To view the console for the plugin, you must click the icon to bring up the plugin popup. Right click, and select "Inspect."
+
 Ta da!
