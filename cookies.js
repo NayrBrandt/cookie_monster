@@ -275,10 +275,7 @@ async function getAllCookies(domain, sendResponse) {
             // name, domain, and path
             const key = JSON.stringify({
                 name: cookie.name,
-                domain: cookie.domain,
-                path: cookie.path,
-                secure: cookie.secure,
-                httpOnly: cookie.httpOnly
+                value: cookie.value
             });
             
             if (!seen.has(key)) {
