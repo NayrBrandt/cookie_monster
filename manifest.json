@@ -7,7 +7,7 @@
         "host_permissions": ["<all_urls>"],
         "action": {
           "default_popup": "layout.html",
-          "default_icon": "cookieIcon.png"
+          "default_icon": "icon.png"
         },
         "background": {
           "service_worker": "cookies.js"
