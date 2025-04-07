@@ -138,3 +138,19 @@ input:checked + .slider:before {
     height: 100%;
     overflow-y: auto;
 }
+
+.flashing {
+    animation: flash 0.5s linear 2;
+}
+
+@keyframes flash {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.2;
+    }
+    100% {
+        opacity: 1;
+    }
+}

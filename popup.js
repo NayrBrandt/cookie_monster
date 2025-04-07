@@ -166,9 +166,9 @@ function removeSiteCookies() {
                 const cookieUrl = (cookie.secure ? "https://" : "http://") + cookie.domain + cookie.path;
                 chrome.cookies.remove({ url: cookieUrl, name: cookie.name }, function(details) {
                     if (details){
-                        console.log("Deleted cookie: ${cookie.name} from ${cookieUrl}");
+                        console.log(`Deleted cookie: ${cookie.name} from ${cookieUrl}`);
                     } else {
-                        console.error("Failed to delete cookie: ${cookie.name} from ${cookieUrl}");
+                        console.error(`Failed to delete cookie: ${cookie.name} from ${cookieUrl}`);
                     }
                 })
         });
@@ -176,5 +176,11 @@ function removeSiteCookies() {
             console.log("No cookies found for ", currentDomain);
         }
     });
+
+    // Doesn't work properly.
+    siteRemoveToggle.classList.add('flashing');
+    setTimeout(() => {
+        siteRemoveToggle.checked = false;
+    }, 1000);
     
 }
